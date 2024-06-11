@@ -33,18 +33,32 @@ struct PlayerScore {
 
 vector<PlayerScore> ranking;
 
-void Setup() {
+//void Setup() {
+  //  gameOver = false;
+  //  dir = STOP;
+  //  x = width / 2;
+  //  y = height / 2;
+  //  fruitX = (rand() % (width - 2)) + 1;
+  //  fruitY = (rand() % (height - 2)) + 1;
+  //  score = 0;
+  //  nTail = 0;
+  //  startTime = time(0);
+  //  startTimeChrono = chrono::steady_clock::now();  
+//}
+
+void Setup(int initialX, int initialY, int initialFruitX, int initialFruitY, int initialScore) {
     gameOver = false;
     dir = STOP;
-    x = width / 2;
-    y = height / 2;
-    fruitX = (rand() % (width - 2)) + 1;
-    fruitY = (rand() % (height - 2)) + 1;
-    score = 0;
+    x = initialX;
+    y = initialY;
+    fruitX = initialFruitX;
+    fruitY = initialFruitY;
+    score = initialScore;
     nTail = 0;
-    startTime = time(0);
-    startTimeChrono = chrono::steady_clock::now();  
-
+    appleCounter = 0;
+    speed = 100;
+	startTime = time(0);
+    startTimeChrono = chrono::steady_clock::now();
 }
 
 void Draw() {
@@ -227,7 +241,9 @@ void MainMenu() {
             system("cls");
             cout << "Digite seu nome: ";
             cin >> playerName;
-            Setup();
+            //Setup();
+             Setup(10, 10, 5, 5, 0); // Exemplo de chamada da versão sobrecarregada
+
             while (!gameOver) {
                 Draw();
                 Input();
