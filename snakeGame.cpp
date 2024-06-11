@@ -1,70 +1,99 @@
-#include <iostream>     // Biblioteca padrão para entrada e saída
-#include <conio.h>      // Biblioteca para manipulação de teclado (_kbhit() e _getch())
-#include <windows.h>    // Biblioteca para funções do Windows (Sleep())
-#include <vector>       // Biblioteca para uso do vetor
-#include <string>       // Biblioteca para manipulação de strings
-#include <fstream>      // Biblioteca para manipulação de arquivos
-#include <ctime>        // Biblioteca para manipulação de tempo
-#include <algorithm>    // Biblioteca para funções de algoritmos (sort)
+#include <iostream>
+#include <conio.h>
+#include <windows.h>
+#include <vector>
+#include <string>
+#include <fstream>
+#include <ctime>
+#include <algorithm>
+#include <chrono>
 
 using namespace std;
 
-// Variáveis globais e constantes
 bool gameOver;
 const int width = 20;
 const int height = 20;
 int x, y, fruitX, fruitY, score;
-int tailX[100], tailY[100]; // Arrays para a posição da cauda da cobra
-int nTail; // Tamanho da cauda
-enum eDirection { STOP = 0, LEFT, RIGHT, UP, DOWN }; // Direções possíveis
+int tailX[100], tailY[100];
+int nTail;
+enum eDirection { STOP = 0, LEFT, RIGHT, UP, DOWN };
 eDirection dir;
 string playerName;
 time_t startTime, endTime;
+int appleCounter = 0;
+int speed = 100;
+auto startTimeChrono = chrono::steady_clock::now();
 
-// Estrutura para armazenar pontuação e tempo do jogador
+
 struct PlayerScore {
     string name;
     int score;
     double time;
 };
 
-vector<PlayerScore> ranking; // Vetor para armazenar o ranking dos jogadores
+vector<PlayerScore> ranking;
 
-// Função para configuração inicial do jogo
 void Setup() {
     gameOver = false;
     dir = STOP;
-    x = width / 2; // Posição inicial da cabeça da cobra
+    x = width / 2;
     y = height / 2;
-    fruitX = (rand() % (width - 2)) + 1; // Gera posição aleatória para a fruta
+    fruitX = (rand() % (width - 2)) + 1;
     fruitY = (rand() % (height - 2)) + 1;
     score = 0;
-    nTail = 0;
-    startTime = time(0); // Inicia o temporizador
+    nTail = 2;
+    startTime = time(0);
+    startTimeChrono = chrono::steady_clock::now();
 }
 
-// Função para desenhar o campo de jogo
-void Draw() {
-    system("cls"); // Limpa a tela
-    cout << "Score: " << score << endl; // Exibe a pontuação na parte superior
+void Setup(int initialX, int initialY, int initialFruitX, int initialFruitY, int initialScore) {
+    gameOver = false;
+    dir = STOP;
+    x = initialX;
+    y = initialY;
+    fruitX = initialFruitX;
+    fruitY = initialFruitY;
+    score = initialScore;
+    nTail = 2;
+    appleCounter = 0;
+    speed = 100;
+	startTime = time(0);
+    startTimeChrono = chrono::steady_clock::now();
+}
 
-    // Desenha a borda superior
+void Draw() {
+      HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_CURSOR_INFO     cursorInfo;
+    GetConsoleCursorInfo(out, &cursorInfo);
+    cursorInfo.bVisible = false; // set the cursor visibility
+    SetConsoleCursorInfo(out, &cursorInfo);
+    COORD coord;
+    coord.X = 0;
+    coord.Y = 0;
+    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+    cout << "Score: " << score << endl;
+    auto currentTime = chrono::steady_clock::now();
+    auto elapsedTime = chrono::duration_cast<chrono::seconds>(currentTime - startTimeChrono).count();
+    cout << "Time: " << elapsedTime << "s" << endl;
+    cout << "Speed: " << speed << endl;
+    cout << "AppleCounter: " << appleCounter << endl;
+
+
     for (int i = 0; i < width + 2; i++)
         cout << "#";
     cout << endl;
 
-    // Desenha o campo de jogo
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
             if (j == 0)
-                cout << "#"; // Borda esquerda
+                cout << "#";
             if (i == y && j == x)
-                cout << "O"; // Cabeça da cobra
+                cout << "O";
             else if (i == fruitY && j == fruitX)
-                cout << "F"; // Fruta
+                cout << "F";
             else {
                 bool print = false;
-                // Desenha a cauda da cobra
+
                 for (int k = 0; k < nTail; k++) {
                     if (tailX[k] == j && tailY[k] == i) {
                         cout << "o";
@@ -72,51 +101,48 @@ void Draw() {
                     }
                 }
                 if (!print)
-                    cout << " "; // Espaço vazio
+                    cout << " ";
             }
             if (j == width - 1)
-                cout << "#"; // Borda direita
+                cout << "#";
         }
         cout << endl;
     }
 
-    // Desenha a borda inferior
     for (int i = 0; i < width + 2; i++)
         cout << "#";
     cout << endl;
 }
 
-// Função para capturar entrada do teclado
 void Input() {
-    if (_kbhit()) { // Verifica se uma tecla foi pressionada
+    if (_kbhit()) {
         switch (_getch()) {
-        case 'a': case 75: // Tecla 'a' ou seta esquerda
+        case 'a': case 75:
             dir = LEFT;
             break;
-        case 'd': case 77: // Tecla 'd' ou seta direita
+        case 'd': case 77:
             dir = RIGHT;
             break;
-        case 'w': case 72: // Tecla 'w' ou seta para cima
+        case 'w': case 72:
             dir = UP;
             break;
-        case 's': case 80: // Tecla 's' ou seta para baixo
+        case 's': case 80:
             dir = DOWN;
             break;
-        case 'x': // Tecla 'x' para sair do jogo
+        case 'x':
             gameOver = true;
             break;
         }
     }
 }
 
-// Função para atualizar a lógica do jogo
 void Logic() {
     int prevX = tailX[0];
     int prevY = tailY[0];
     int prev2X, prev2Y;
     tailX[0] = x;
     tailY[0] = y;
-    // Atualiza a posição da cauda
+
     for (int i = 1; i < nTail; i++) {
         prev2X = tailX[i];
         prev2Y = tailY[i];
@@ -126,7 +152,6 @@ void Logic() {
         prevY = prev2Y;
     }
 
-    // Atualiza a posição da cabeça da cobra
     switch (dir) {
     case LEFT:
         x--;
@@ -144,73 +169,70 @@ void Logic() {
         break;
     }
 
-    // Verifica colisão com as bordas
     if (x >= width || x < 0 || y >= height || y < 0)
         gameOver = true;
 
-    // Verifica colisão com a cauda
-    for (int i = 0; i < nTail; i++)
+    for (int i = 2; i < nTail; i++)
         if (tailX[i] == x && tailY[i] == y)
             gameOver = true;
 
-    // Verifica se a cobra comeu a fruta
     if (x == fruitX && y == fruitY) {
-        score += 10; // Aumenta a pontuação
-        fruitX = (rand() % (width - 2)) + 1; // Gera nova fruta em posição aleatória
-        fruitY = (rand() % (height - 2)) + 1;
-        nTail++; // Aumenta o tamanho da cauda
+        score += 10;
+        fruitX = rand() % width;
+        fruitY = rand() % height;
+        nTail++;
+        appleCounter++;
+
+        if (appleCounter % 5 == 0 && speed > 10) {
+            speed -= 90;
+        }
     }
 
-    // Condição de vitória
     if (score >= 100) {
         cout << "Parabéns, você ganhou!" << endl;
         gameOver = true;
     }
 }
 
-// Função para salvar o ranking em um arquivo
 void SaveRanking() {
-    ofstream outfile("ranking.txt");
+    ofstream outfile("ranking.txt", ios::app);
     for (const auto& entry : ranking) {
         outfile << "Jogador: " << entry.name << ", Pontuação: " << entry.score << ", Tempo: " << entry.time << "s" << endl;
     }
     outfile.close();
 }
 
-// Função para carregar o ranking de um arquivo
 void LoadRanking() {
     ifstream infile("ranking.txt");
-    ranking.clear(); // Limpa o ranking atual
+    ranking.clear();
     string name;
     int score;
     double time;
-    // Carrega os dados do arquivo
+
     while (infile >> name >> score >> time) {
         ranking.push_back({ name, score, time });
     }
     infile.close();
 }
 
-// Função para mostrar o ranking
 void ShowRanking() {
     system("cls");
     cout << "Ranking de Jogadores:\n";
-    // Ordena o ranking primeiro por pontuação, depois por tempo
+
     sort(ranking.begin(), ranking.end(), [](const PlayerScore& a, const PlayerScore& b) {
         if (a.score == b.score) {
             return a.time < b.time;
         }
         return a.score > b.score;
         });
-    // Exibe o ranking
+
     for (size_t i = 0; i < ranking.size(); i++) {
         cout << i + 1 << ". " << ranking[i].name << " - Pontos: " << ranking[i].score << " - Tempo: " << ranking[i].time << "s" << endl;
     }
     cout << "\nPressione qualquer tecla para voltar ao menu...\n";
-    _getch(); // Espera que o usuário pressione uma tecla
+    _getch();
 }
 
-// Função para exibir o menu principal
 void MainMenu() {
     LoadRanking(); // Carrega o ranking do arquivo
     bool exitProgram = false;
