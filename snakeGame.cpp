@@ -1,11 +1,11 @@
-#include <iostream>     // Biblioteca padrão para entrada e saída
-#include <conio.h>      // Biblioteca para manipulação de teclado (_kbhit() e _getch())
-#include <windows.h>    // Biblioteca para funções do Windows (Sleep())
-#include <vector>       // Biblioteca para uso do vetor
-#include <string>       // Biblioteca para manipulação de strings
-#include <fstream>      // Biblioteca para manipulação de arquivos
-#include <ctime>        // Biblioteca para manipulação de tempo
-#include <algorithm>    // Biblioteca para funções de algoritmos (sort)
+#include <iostream> // Biblioteca padrão para entrada e saída
+#include <conio.h> // Biblioteca para manipulação de teclado (_kbhit() e _getch())
+#include <windows.h> // Biblioteca para funções do Windows (Sleep())
+#include <vector> // Biblioteca para uso do vetor
+#include <string> // Biblioteca para manipulação de strings
+#include <fstream> // Biblioteca para manipulação de arquivos
+#include <ctime> // Biblioteca para manipulação de tempo
+#include <algorithm> // Biblioteca para funções de algoritmos (sort)
 
 using namespace std;
 
@@ -47,12 +47,10 @@ void Setup() {
 void Draw() {
     system("cls"); // Limpa a tela
     cout << "Score: " << score << endl; // Exibe a pontuação na parte superior
-
     // Desenha a borda superior
     for (int i = 0; i < width + 2; i++)
         cout << "#";
     cout << endl;
-
     // Desenha o campo de jogo
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
@@ -79,7 +77,6 @@ void Draw() {
         }
         cout << endl;
     }
-
     // Desenha a borda inferior
     for (int i = 0; i < width + 2; i++)
         cout << "#";
@@ -90,21 +87,21 @@ void Draw() {
 void Input() {
     if (_kbhit()) { // Verifica se uma tecla foi pressionada
         switch (_getch()) {
-        case 'a': case 75: // Tecla 'a' ou seta esquerda
-            dir = LEFT;
-            break;
-        case 'd': case 77: // Tecla 'd' ou seta direita
-            dir = RIGHT;
-            break;
-        case 'w': case 72: // Tecla 'w' ou seta para cima
-            dir = UP;
-            break;
-        case 's': case 80: // Tecla 's' ou seta para baixo
-            dir = DOWN;
-            break;
-        case 'x': // Tecla 'x' para sair do jogo
-            gameOver = true;
-            break;
+            case 'a': case 75: case 'A':// Tecla 'a' ou seta esquerda
+                dir = LEFT;
+                break;
+            case 'd': case 77: case 'D':// Tecla 'd' ou seta direita
+                dir = RIGHT;
+                break;
+            case 'w': case 72: case 'W':// Tecla 'w' ou seta para cima
+                dir = UP;
+                break;
+            case 's': case 80: case 'S': // Tecla 's' ou seta para baixo
+                dir = DOWN;
+                break;
+            case 'x': // Tecla 'x' para sair do jogo
+                gameOver = true;
+                break;
         }
     }
 }
@@ -125,34 +122,30 @@ void Logic() {
         prevX = prev2X;
         prevY = prev2Y;
     }
-
     // Atualiza a posição da cabeça da cobra
     switch (dir) {
-    case LEFT:
-        x--;
-        break;
-    case RIGHT:
-        x++;
-        break;
-    case UP:
-        y--;
-        break;
-    case DOWN:
-        y++;
-        break;
-    default:
-        break;
+        case LEFT:
+            x--;
+            break;
+        case RIGHT:
+            x++;
+            break;
+        case UP:
+            y--;
+            break;
+        case DOWN:
+            y++;
+            break;
+        default:
+            break;
     }
-
     // Verifica colisão com as bordas
     if (x >= width || x < 0 || y >= height || y < 0)
         gameOver = true;
-
     // Verifica colisão com a cauda
     for (int i = 0; i < nTail; i++)
         if (tailX[i] == x && tailY[i] == y)
             gameOver = true;
-
     // Verifica se a cobra comeu a fruta
     if (x == fruitX && y == fruitY) {
         score += 10; // Aumenta a pontuação
@@ -160,7 +153,6 @@ void Logic() {
         fruitY = (rand() % (height - 2)) + 1;
         nTail++; // Aumenta o tamanho da cauda
     }
-
     // Condição de vitória
     if (score >= 100) {
         cout << "Parabéns, você ganhou!" << endl;
@@ -168,11 +160,19 @@ void Logic() {
     }
 }
 
+// Comparator function for sorting the ranking
+bool comparePlayerScores(const PlayerScore& a, const PlayerScore& b) {
+    if (a.score != b.score) {
+        return a.score > b.score;  // Descending order by score
+    }
+    return a.time < b.time;  // Ascending order by time if scores are equal
+}
+
 // Função para salvar o ranking em um arquivo
 void SaveRanking() {
     ofstream outfile("ranking.txt");
     for (const auto& entry : ranking) {
-        outfile << "Jogador: " << entry.name << ", Pontuação: " << entry.score << ", Tempo: " << entry.time << "s" << endl;
+            outfile << entry.name << " " << entry.score << " " << entry.time << endl;
     }
     outfile.close();
 }
@@ -196,17 +196,12 @@ void ShowRanking() {
     system("cls");
     cout << "Ranking de Jogadores:\n";
     // Ordena o ranking primeiro por pontuação, depois por tempo
-    sort(ranking.begin(), ranking.end(), [](const PlayerScore& a, const PlayerScore& b) {
-        if (a.score == b.score) {
-            return a.time < b.time;
-        }
-        return a.score > b.score;
-        });
+    sort(ranking.begin(), ranking.end(), comparePlayerScores);
     // Exibe o ranking
     for (size_t i = 0; i < ranking.size(); i++) {
         cout << i + 1 << ". " << ranking[i].name << " - Pontos: " << ranking[i].score << " - Tempo: " << ranking[i].time << "s" << endl;
     }
-    cout << "\nPressione qualquer tecla para voltar ao menu...\n";
+    cout << "\n Pressione qualquer tecla para voltar ao menu...\n";
     _getch(); // Espera que o usuário pressione uma tecla
 }
 
@@ -223,18 +218,19 @@ void MainMenu() {
         cout << "Escolha uma opção: ";
         char choice = _getch();
         switch (choice) {
-        case '1': {
-            system("cls");
-            cout << "Digite seu nome: ";
-            cin >> playerName;
-            Setup(); // Configura o jogo
-            while (!gameOver) {
-                Draw(); // Desenha o campo de jogo
-                Input(); // Captura a entrada do teclado
-                Logic(); // Atualiza a lógica do jogo
-                Sleep(100); // Controla a velocidade do jogo
-            }
-            endTime = time(0); // Registra o tempo de fim
+            case '1': {
+                system("cls");
+                cout << "Digite seu nome: ";
+                cin >> playerName;
+                Setup(); // Configura o jogo
+                while (!gameOver) {
+                    Draw(); // Desenha o campo de jogo
+                    Input(); // Captura a entrada do teclado
+                    Logic(); // Atualiza a lógica do jogo
+                    Sleep(100); // Controla a velocidade do jogo
+                }
+                endTime = time(0); // Registra
+
             double timeTaken = difftime(endTime, startTime); // Calcula o tempo total
             ranking.push_back({ playerName, score, timeTaken }); // Adiciona ao ranking
             SaveRanking(); // Salva o ranking no arquivo
