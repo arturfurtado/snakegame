@@ -54,7 +54,7 @@ void Setup(int initialX, int initialY, int initialFruitX, int initialFruitY, int
     fruitX = initialFruitX;
     fruitY = initialFruitY;
     score = initialScore;
-    nTail = 0;
+    nTail = 2;
     appleCounter = 0;
     speed = 100;
 	startTime = time(0);
@@ -164,7 +164,7 @@ void Logic() {
     if (x >= width || x < 0 || y >= height || y < 0)
         gameOver = true;
 
-    for (int i = 0; i < nTail; i++)
+    for (int i = 2; i < nTail; i++)
         if (tailX[i] == x && tailY[i] == y)
             gameOver = true;
 
