@@ -6,6 +6,7 @@
 #include <fstream>      
 #include <ctime>        
 #include <algorithm>    
+#include <chrono>
 
 using namespace std;
 
@@ -13,12 +14,16 @@ bool gameOver;
 const int width = 20;
 const int height = 20;
 int x, y, fruitX, fruitY, score;
-int tailX[100], tailY[100]; 
-int nTail; 
-enum eDirection { STOP = 0, LEFT, RIGHT, UP, DOWN }; 
+int tailX[100], tailY[100];
+int nTail;
+enum eDirection { STOP = 0, LEFT, RIGHT, UP, DOWN };
 eDirection dir;
 string playerName;
 time_t startTime, endTime;
+int appleCounter = 0;
+int speed = 100;
+auto startTimeChrono = chrono::steady_clock::now();
+
 
 struct PlayerScore {
     string name;
@@ -26,23 +31,31 @@ struct PlayerScore {
     double time;
 };
 
-vector<PlayerScore> ranking; 
+vector<PlayerScore> ranking;
 
 void Setup() {
     gameOver = false;
     dir = STOP;
-    x = width / 2; 
+    x = width / 2;
     y = height / 2;
-    fruitX = (rand() % (width - 2)) + 1; 
+    fruitX = (rand() % (width - 2)) + 1;
     fruitY = (rand() % (height - 2)) + 1;
     score = 0;
     nTail = 0;
-    startTime = time(0); 
+    startTime = time(0);
+    startTimeChrono = chrono::steady_clock::now();  
+
 }
 
 void Draw() {
-    system("cls"); 
-    cout << "Score: " << score << endl; 
+    system("cls");
+    cout << "Score: " << score << endl;
+    auto currentTime = chrono::steady_clock::now();
+    auto elapsedTime = chrono::duration_cast<chrono::seconds>(currentTime - startTimeChrono).count();
+    cout << "Time: " << elapsedTime << "s" << endl;
+    cout << "Speed: " << speed << endl;
+    cout << "AppleCounter: " << appleCounter << endl;
+
 
     for (int i = 0; i < width + 2; i++)
         cout << "#";
@@ -51,11 +64,11 @@ void Draw() {
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
             if (j == 0)
-                cout << "#"; 
+                cout << "#";
             if (i == y && j == x)
-                cout << "O"; 
+                cout << "O";
             else if (i == fruitY && j == fruitX)
-                cout << "F"; 
+                cout << "F";
             else {
                 bool print = false;
 
@@ -66,10 +79,10 @@ void Draw() {
                     }
                 }
                 if (!print)
-                    cout << " "; 
+                    cout << " ";
             }
             if (j == width - 1)
-                cout << "#"; 
+                cout << "#";
         }
         cout << endl;
     }
@@ -80,21 +93,21 @@ void Draw() {
 }
 
 void Input() {
-    if (_kbhit()) { 
+    if (_kbhit()) {
         switch (_getch()) {
-        case 'a': case 75: 
+        case 'a': case 75:
             dir = LEFT;
             break;
-        case 'd': case 77: 
+        case 'd': case 77:
             dir = RIGHT;
             break;
-        case 'w': case 72: 
+        case 'w': case 72:
             dir = UP;
             break;
-        case 's': case 80: 
+        case 's': case 80:
             dir = DOWN;
             break;
-        case 'x': 
+        case 'x':
             gameOver = true;
             break;
         }
@@ -142,10 +155,15 @@ void Logic() {
             gameOver = true;
 
     if (x == fruitX && y == fruitY) {
-        score += 10; 
-        fruitX = (rand() % (width - 2)) + 1; 
-        fruitY = (rand() % (height - 2)) + 1;
-        nTail++; 
+        score += 10;
+        fruitX = rand() % width;
+        fruitY = rand() % height;
+        nTail++;
+        appleCounter++;
+
+        if (appleCounter % 5 == 0 && speed > 10) {
+            speed -= 90;
+        }
     }
 
     if (score >= 100) {
@@ -164,7 +182,7 @@ void SaveRanking() {
 
 void LoadRanking() {
     ifstream infile("ranking.txt");
-    ranking.clear(); 
+    ranking.clear();
     string name;
     int score;
     double time;
@@ -190,14 +208,14 @@ void ShowRanking() {
         cout << i + 1 << ". " << ranking[i].name << " - Pontos: " << ranking[i].score << " - Tempo: " << ranking[i].time << "s" << endl;
     }
     cout << "\nPressione qualquer tecla para voltar ao menu...\n";
-    _getch(); 
+    _getch();
 }
 
 void MainMenu() {
-    LoadRanking(); 
+    LoadRanking();
     bool exitProgram = false;
     while (!exitProgram) {
-        system("cls"); 
+        system("cls");
         cout << "Snake Game\n";
         cout << "1. Jogar\n";
         cout << "2. Ver Ranking\n";
@@ -209,24 +227,24 @@ void MainMenu() {
             system("cls");
             cout << "Digite seu nome: ";
             cin >> playerName;
-            Setup(); 
+            Setup();
             while (!gameOver) {
-                Draw(); 
-                Input(); 
-                Logic(); 
-                Sleep(100); 
+                Draw();
+                Input();
+                Logic();
+                Sleep(speed);
             }
-            endTime = time(0); 
-            double timeTaken = difftime(endTime, startTime); 
-            ranking.push_back({ playerName, score, timeTaken }); 
-            SaveRanking(); 
+            endTime = time(0);
+            double timeTaken = difftime(endTime, startTime);
+            ranking.push_back({ playerName, score, timeTaken });
+            SaveRanking();
             break;
         }
         case '2':
-            ShowRanking(); 
+            ShowRanking();
             break;
         case '3':
-            exitProgram = true; 
+            exitProgram = true;
             break;
         default:
             cout << "\nOpção inválida!\n";
