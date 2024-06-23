@@ -1,11 +1,11 @@
-#include <iostream>     
-#include <conio.h>      
-#include <windows.h>    
-#include <vector>       
-#include <string>       
-#include <fstream>      
-#include <ctime>        
-#include <algorithm>    
+#include <iostream>
+#include <conio.h>
+#include <windows.h>
+#include <vector>
+#include <string>
+#include <fstream>
+#include <ctime>
+#include <algorithm>
 #include <chrono>
 
 using namespace std;
@@ -34,16 +34,16 @@ struct PlayerScore {
 vector<PlayerScore> ranking;
 
 //void Setup() {
-  //  gameOver = false;
-  //  dir = STOP;
-  //  x = width / 2;
-  //  y = height / 2;
-  //  fruitX = (rand() % (width - 2)) + 1;
-  //  fruitY = (rand() % (height - 2)) + 1;
-  //  score = 0;
-  //  nTail = 0;
-  //  startTime = time(0);
-  //  startTimeChrono = chrono::steady_clock::now();  
+//  gameOver = false;
+//  dir = STOP;
+//  x = width / 2;
+//  y = height / 2;
+//  fruitX = (rand() % (width - 2)) + 1;
+//  fruitY = (rand() % (height - 2)) + 1;
+//  score = 0;
+//  nTail = 0;
+//  startTime = time(0);
+//  startTimeChrono = chrono::steady_clock::now();
 //}
 
 void Setup(int initialX, int initialY, int initialFruitX, int initialFruitY, int initialScore) {
@@ -57,18 +57,27 @@ void Setup(int initialX, int initialY, int initialFruitX, int initialFruitY, int
     nTail = 2;
     appleCounter = 0;
     speed = 100;
-	startTime = time(0);
+    startTime = time(0);
     startTimeChrono = chrono::steady_clock::now();
 }
 
 void Draw() {
-    system("cls");
+
+    HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_CURSOR_INFO     cursorInfo;
+    GetConsoleCursorInfo(out, &cursorInfo);
+    cursorInfo.bVisible = false; // set the cursor visibility
+    SetConsoleCursorInfo(out, &cursorInfo);
+    COORD coord;
+    coord.X = 0;
+    coord.Y = 0;
+    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
     cout << "Score: " << score << endl;
     auto currentTime = chrono::steady_clock::now();
     auto elapsedTime = chrono::duration_cast<chrono::seconds>(currentTime - startTimeChrono).count();
-    cout << "Time: " << elapsedTime << "s" << endl;
-    cout << "Speed: " << speed << endl;
-    cout << "AppleCounter: " << appleCounter << endl;
+    cout << "Tempo: " << elapsedTime << "s" << endl;
+    cout << "Velocidade " << speed << endl;
+    cout << "Contador de maçãs: " << appleCounter << endl;
 
 
     for (int i = 0; i < width + 2; i++)
@@ -106,20 +115,23 @@ void Draw() {
     cout << endl;
 }
 
-void Input() {
-    if (_kbhit()) {
-        switch (_getch()) {
-        case 'a': case 75:
-            dir = LEFT;
+void Input()
+{
+    if (_kbhit())
+    {
+        switch (_getch())
+        {
+        case 'a':
+            if (dir != RIGHT) dir = LEFT;
             break;
-        case 'd': case 77:
-            dir = RIGHT;
+        case 'd':
+            if (dir != LEFT) dir = RIGHT;
             break;
-        case 'w': case 72:
-            dir = UP;
+        case 'w':
+            if (dir != DOWN) dir = UP;
             break;
-        case 's': case 80:
-            dir = DOWN;
+        case 's':
+            if (dir != UP) dir = DOWN;
             break;
         case 'x':
             gameOver = true;
@@ -242,7 +254,7 @@ void MainMenu() {
             cout << "Digite seu nome: ";
             cin >> playerName;
             //Setup();
-             Setup(10, 10, 5, 5, 0); // Exemplo de chamada da versão sobrecarregada
+            Setup(10, 10, 5, 5, 0); // Exemplo de chamada da versão sobrecarregada
 
             while (!gameOver) {
                 Draw();
