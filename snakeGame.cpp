@@ -100,11 +100,9 @@ void SnakeGame::Setup() {
     head.x = width / 2;
     head.y = height / 2;
     score = 0;
-    nTail = 3; // Snake starts with 3 units length
+    nTail = 0; // Snake starts with 1 unit length
     tail.clear();
-    for (int i = 0; i < nTail; ++i) {
-        tail.push_back({ head.x, head.y + i + 1 });
-    }
+
     specialItemPresent = false;
     decreaseApplePresent = false;
     if (mode == NORMAL) {
@@ -167,7 +165,6 @@ void SnakeGame::Draw() {
         gameOver = true;
     }
 }
-
 
 void SnakeGame::Input() {
     if (_kbhit()) {
