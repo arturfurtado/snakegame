@@ -26,7 +26,7 @@ struct PlayerScore {
 
 class SnakeGame {
 public:
-    SnakeGame(int width = 20, int height = 20, int difficulty = 1, GameMode mode = NORMAL);
+    SnakeGame(int width = 20, int height = 20, int difficulty = 1, GameMode mode = NORMAL, bool npc = false);
     void Run();
     void DisplayRanking();
 
@@ -39,6 +39,7 @@ private:
     void GenerateChallengeItems();
     bool IsCollision(int x, int y);
     void SaveScore(int score);
+    void NPCMove();
 
     int width, height, difficulty;
     int score, highScore;
@@ -56,12 +57,13 @@ private:
     vector<PlayerScore> ranking;
     int moves;
     int applesEaten;
+    bool useNPC;
 
     void LoadRanking();
     void UpdateRanking(const string& playerName, int score);
 };
 
-SnakeGame::SnakeGame(int w, int h, int diff, GameMode m) : width(w), height(h), difficulty(diff), mode(m) {
+SnakeGame::SnakeGame(int w, int h, int diff, GameMode m, bool npc) : width(w), height(h), difficulty(diff), mode(m), useNPC(npc) {
     highScore = 0;
     LoadRanking();
 }
@@ -96,13 +98,12 @@ void SnakeGame::UpdateRanking(const string& playerName, int score) {
 
 void SnakeGame::Setup() {
     gameOver = false;
-    dir = STOP;
+    dir = RIGHT; // Começa movendo para a direita
     head.x = width / 2;
     head.y = height / 2;
     score = 0;
-    nTail = 0; // Snake starts with 1 unit length
+    nTail = 0; // Inicia com comprimento zero (apenas cabeça)
     tail.clear();
-
     specialItemPresent = false;
     decreaseApplePresent = false;
     if (mode == NORMAL) {
@@ -116,6 +117,7 @@ void SnakeGame::Setup() {
     moves = 0;
     applesEaten = 0;
 }
+
 
 void SnakeGame::Draw() {
     // Clear screen without flickering
@@ -192,11 +194,121 @@ void SnakeGame::Input() {
     }
 }
 
+
+
+void SnakeGame::NPCMove() {
+    // Direções possíveis
+    vector<Direction> possibleDirections;
+
+    // Determina a direção oposta à atual
+    Direction oppositeDirection;
+    switch (dir) {
+    case LEFT:
+        oppositeDirection = RIGHT;
+        break;
+    case RIGHT:
+        oppositeDirection = LEFT;
+        break;
+    case UP:
+        oppositeDirection = DOWN;
+        break;
+    case DOWN:
+        oppositeDirection = UP;
+        break;
+    default:
+        oppositeDirection = STOP;
+        break;
+    }
+
+    // Verifica as direções possíveis e prioriza movimentos seguros
+    if (!IsCollision(head.x - 1, head.y) && dir != RIGHT) {
+        possibleDirections.push_back(LEFT);
+    }
+    if (!IsCollision(head.x + 1, head.y) && dir != LEFT) {
+        possibleDirections.push_back(RIGHT);
+    }
+    if (!IsCollision(head.x, head.y - 1) && dir != DOWN) {
+        possibleDirections.push_back(UP);
+    }
+    if (!IsCollision(head.x, head.y + 1) && dir != UP) {
+        possibleDirections.push_back(DOWN);
+    }
+
+    // Escolhe a melhor direção baseada na distância até a comida
+    Direction bestDirection = STOP;
+    int minDistance = INT_MAX;
+
+    for (auto direction : possibleDirections) {
+        int distance = 0;
+        int futureCollision = 0;
+        Position futureHead = head;
+
+        // Simula o movimento para frente na direção atual
+        switch (direction) {
+        case LEFT:
+            futureHead.x--;
+            break;
+        case RIGHT:
+            futureHead.x++;
+            break;
+        case UP:
+            futureHead.y--;
+            break;
+        case DOWN:
+            futureHead.y++;
+            break;
+        default:
+            break;
+        }
+
+        // Verifica se esse movimento levará a uma colisão com o próprio corpo
+        for (int i = 0; i < nTail; ++i) {
+            if (futureHead.x == tail[i].x && futureHead.y == tail[i].y) {
+                futureCollision = 1;
+                break;
+            }
+        }
+
+        // Verifica se o movimento leva à formação de um ciclo ou loop
+        bool willFormCycle = false;
+        // Implemente sua lógica de detecção de ciclo aqui, por exemplo:
+        // Verificar se a nova posição da cabeça é semelhante à uma posição anterior
+        for (int i = 1; i < nTail; ++i) {
+            if (futureHead.x == tail[i].x && futureHead.y == tail[i].y) {
+                willFormCycle = true;
+                break;
+            }
+        }
+
+        // Calcula a distância até a comida
+        distance = abs(futureHead.x - appleX) + abs(futureHead.y - appleY);
+
+        // Prioriza direções que não levem a uma colisão imediata ou futura
+        if (!futureCollision && !willFormCycle && distance < minDistance) {
+            minDistance = distance;
+            bestDirection = direction;
+        }
+    }
+
+    // Define a direção escolhida
+    dir = bestDirection;
+}
+
+
+bool SnakeGame::IsCollision(int x, int y) {
+    // Verifica se a posição (x, y) colide com qualquer parte do corpo da cobra
+    for (int i = 0; i < nTail; i++) {
+        if (tail[i].x == x && tail[i].y == y) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void SnakeGame::Logic() {
     if (tail.size() != nTail) {
         tail.resize(nTail);
     }
-
     Position prev = head;
     Position prev2;
 
@@ -291,11 +403,15 @@ void SnakeGame::Run() {
     string playerName;
     cout << "Enter your name: ";
     cin >> playerName;
-
     Setup();
     while (!gameOver) {
         Draw();
-        Input();
+        if (useNPC) {
+            NPCMove();
+        }
+        else {
+            Input();
+        }
         Logic();
         this_thread::sleep_for(chrono::milliseconds(100 / difficulty)); // control game speed
     }
@@ -331,19 +447,20 @@ void DisplayMenu() {
     cout << "3. Hard" << endl;
     cout << "4. Challenge Mode" << endl;
     cout << "5. View Ranking" << endl;
+    cout << "6. NPC Mode" << endl;
     cout << "Choose an option: ";
 }
 
 int main() {
     srand(time(0));
     int choice;
-
     while (true) {
         DisplayMenu();
         cin >> choice;
 
         int difficulty;
         GameMode mode = NORMAL;
+        bool useNPC = false;
 
         switch (choice) {
         case 1:
@@ -365,12 +482,57 @@ int main() {
             game.DisplayRanking();
             continue;
         }
+        case 6:
+            useNPC = true;
+            difficulty = 3;
+            break;
         default:
             difficulty = 1;
             break;
         }
 
-        SnakeGame game((mode == CHALLENGE ? 40 : 20), (mode == CHALLENGE ? 40 : 20), difficulty, mode);
+        SnakeGame game((mode == CHALLENGE ? 40 : 20), (mode == CHALLENGE ? 40 : 20), difficulty, mode, useNPC);
+        game.Run();
+    }
+
+    return 0;
+    while (true) {
+        DisplayMenu();
+        cin >> choice;
+
+        int difficulty;
+        GameMode mode = NORMAL;
+        bool useNPC = false;
+
+        switch (choice) {
+        case 1:
+            difficulty = 1;
+            break;
+        case 2:
+            difficulty = 2;
+            break;
+        case 3:
+            difficulty = 3;
+            break;
+        case 4:
+            difficulty = 3; // Challenge mode with highest difficulty
+            mode = CHALLENGE;
+            break;
+        case 5:
+        {
+            SnakeGame game;
+            game.DisplayRanking();
+            continue;
+        }
+        case 6:
+            useNPC = true;
+            break;
+        default:
+            difficulty = 1;
+            break;
+        }
+
+        SnakeGame game((mode == CHALLENGE ? 40 : 20), (mode == CHALLENGE ? 40 : 20), difficulty, mode, useNPC);
         game.Run();
     }
 
