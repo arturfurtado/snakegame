@@ -1,105 +1,192 @@
 #include <iostream>
-#include <fstream>
 #include <conio.h>
-#include <windows.h>
 #include <ctime>
-#include <queue>
 #include <vector>
-#include <unordered_map>
-#include <unordered_set>
-
+#include <chrono>
+#include <thread>
+#include <fstream>
 #include <algorithm>
+
 using namespace std;
 
-const int width = 20;
-const int height = 17;
+enum Direction { STOP = 0, LEFT, RIGHT, UP, DOWN };
+enum GameMode { NORMAL, CHALLENGE };
 
-struct Node {
+Direction dir;
 
-    int x, y;
-    int cost, priority;
-    bool operator<(const Node& other) const { return priority > other.priority; }
-    bool operator==(const Node& other) const { return x == other.x && y == other.y; }
-    bool operator!=(const Node& other) const { return !(*this == other); }
+struct Position {
+    int x;
+    int y;
 };
 
-struct NodeHash {
-    size_t operator()(const Node& n) const { return n.x * 31 + n.y; }
+struct PlayerScore {
+    string name;
+    int score;
 };
 
-bool gameOver;
-int x, y, fruitX, fruitY, score;
-int tailX[100], tailY[100];
-int nTail;
-enum eDirecton { STOP = 0, LEFT, RIGHT, UP, DOWN };
-eDirecton dir;
-int ranking[5];
-string rankingName[5];
-char playerName[10];
+class SnakeGame {
+public:
+    SnakeGame(int width = 20, int height = 20, int difficulty = 1, GameMode mode = NORMAL);
+    void Run();
+    void DisplayRanking();
 
-void setup() {
-    gameOver = false;
-    dir = STOP;
-    x = width / 2;
-    y = height / 2;
-    fruitX = rand() % width;
-    fruitY = rand() % height;
-    score = 0;
-    nTail = 0;
+private:
+    void Setup();
+    void Draw();
+    void Input();
+    void Logic();
+    void GenerateItem();
+    void GenerateChallengeItems();
+    bool IsCollision(int x, int y);
+    void SaveScore(int score);
+
+    int width, height, difficulty;
+    int score, highScore;
+    int appleX, appleY, specialItemX, specialItemY;
+    int decreaseAppleX, decreaseAppleY;
+    int nTail;
+    vector<Position> tail;
+    Position head;
+    bool gameOver;
+    time_t startTime, endTime;
+    bool specialItemPresent, decreaseApplePresent;
+    int specialItemDuration;
+    GameMode mode;
+    chrono::time_point<chrono::steady_clock> challengeEndTime;
+    vector<PlayerScore> ranking;
+    int moves;
+    int applesEaten;
+
+    void LoadRanking();
+    void UpdateRanking(const string& playerName, int score);
+};
+
+SnakeGame::SnakeGame(int w, int h, int diff, GameMode m) : width(w), height(h), difficulty(diff), mode(m) {
+    highScore = 0;
+    LoadRanking();
 }
 
-void draw() {
-    system("cls");
-    for (int i = 0; i < width + 2; i++)
-        cout << "#";
+void SnakeGame::LoadRanking() {
+    ifstream file("ranking.txt");
+    if (file.is_open()) {
+        PlayerScore playerScore;
+        while (file >> playerScore.name >> playerScore.score) {
+            ranking.push_back(playerScore);
+        }
+        file.close();
+    }
+}
+
+void SnakeGame::UpdateRanking(const string& playerName, int score) {
+    PlayerScore playerScore = { playerName, score };
+    ranking.push_back(playerScore);
+
+    sort(ranking.begin(), ranking.end(), [](const PlayerScore& a, const PlayerScore& b) {
+        return a.score > b.score;
+        });
+
+    ofstream file("ranking.txt");
+    if (file.is_open()) {
+        for (const auto& ps : ranking) {
+            file << ps.name << " " << ps.score << endl;
+        }
+        file.close();
+    }
+}
+
+void SnakeGame::Setup() {
+    gameOver = false;
+    dir = STOP;
+    head.x = width / 2;
+    head.y = height / 2;
+    score = 0;
+    nTail = 3; // Snake starts with 3 units length
+    tail.clear();
+    for (int i = 0; i < nTail; ++i) {
+        tail.push_back({ head.x, head.y + i + 1 });
+    }
+    specialItemPresent = false;
+    decreaseApplePresent = false;
+    if (mode == NORMAL) {
+        GenerateItem();
+    }
+    else if (mode == CHALLENGE) {
+        GenerateChallengeItems();
+        challengeEndTime = chrono::steady_clock::now() + chrono::minutes(2);
+    }
+    startTime = time(0);
+    moves = 0;
+    applesEaten = 0;
+}
+
+void SnakeGame::Draw() {
+    // Clear screen without flickering
+    cout << "\033[H\033[J";
+
+    for (int i = 0; i < width + 2; i++) cout << "#";
     cout << endl;
 
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
-            if (j == 0)
-                cout << "#";
-            if (i == y && j == x)
-                cout << "O";
-            else if (i == fruitY && j == fruitX)
-                cout << "F";
+            if (j == 0) cout << "#";
+            if (i == head.y && j == head.x) cout << "O";
+            else if (i == appleY && j == appleX) cout << "A";
+            else if (specialItemPresent && i == specialItemY && j == specialItemX) cout << "S";
+            else if (decreaseApplePresent && i == decreaseAppleY && j == decreaseAppleX) cout << "D";
             else {
-                bool print = false;
+                bool printTail = false;
                 for (int k = 0; k < nTail; k++) {
-                    if (tailX[k] == j && tailY[k] == i) {
+                    if (tail[k].x == j && tail[k].y == i) {
                         cout << "o";
-                        print = true;
+                        printTail = true;
                     }
                 }
-                if (!print)
-                    cout << " ";
+                if (!printTail) cout << " ";
             }
-
-            if (j == width - 1)
-                cout << "#";
+            if (j == width - 1) cout << "#";
         }
         cout << endl;
     }
 
-    for (int i = 0; i < width + 2; i++)
-        cout << "#";
+    for (int i = 0; i < width + 2; i++) cout << "#";
     cout << endl;
-    cout << "Score: " << score << endl;
+    cout << "Score: " << score << "  HighScore: " << highScore << endl;
+    cout << "Moves: " << moves << "  Apples Eaten: " << applesEaten << endl;
+    cout << "Difficulty: " << difficulty << "  Speed: " << 100 / difficulty << endl;
+
+    if (mode == CHALLENGE) {
+        auto timeLeft = chrono::duration_cast<chrono::seconds>(challengeEndTime - chrono::steady_clock::now()).count();
+        cout << "Time left: " << timeLeft << " seconds" << endl;
+        if (timeLeft <= 0) {
+            gameOver = true;
+        }
+    }
+
+    if (applesEaten >= 100) {
+        cout << "Congratulations! You've eaten 100 apples!" << endl;
+        gameOver = true;
+    }
 }
 
-void input() {
+
+void SnakeGame::Input() {
     if (_kbhit()) {
         switch (_getch()) {
         case 'a':
-            dir = LEFT;
+            if (dir != RIGHT) dir = LEFT;
+            moves++;
             break;
         case 'd':
-            dir = RIGHT;
+            if (dir != LEFT) dir = RIGHT;
+            moves++;
             break;
         case 'w':
-            dir = UP;
+            if (dir != DOWN) dir = UP;
+            moves++;
             break;
         case 's':
-            dir = DOWN;
+            if (dir != UP) dir = DOWN;
+            moves++;
             break;
         case 'x':
             gameOver = true;
@@ -108,212 +195,187 @@ void input() {
     }
 }
 
-bool isOccupied(int x, int y) {
+void SnakeGame::Logic() {
+    if (tail.size() != nTail) {
+        tail.resize(nTail);
+    }
+
+    Position prev = head;
+    Position prev2;
+
     for (int i = 0; i < nTail; i++) {
-        if (tailX[i] == x && tailY[i] == y) return true;
-    }
-    return false;
-}
-
-vector<Node> getNeighbors(Node node) {
-    vector<Node> neighbors;
-    vector<pair<int, int>> directions = { {0, 1}, {1, 0}, {0, -1}, {-1, 0} };
-    for (auto d : directions) {
-        int nx = node.x + d.first;
-        int ny = node.y + d.second;
-        if (nx >= 0 && nx < width && ny >= 0 && ny < height && !isOccupied(nx, ny)) {
-            neighbors.push_back({ nx, ny, node.cost + 1 });
-        }
-    }
-    return neighbors;
-}
-
-int heuristic(Node a, Node b) {
-    return abs(a.x - b.x) + abs(a.y - b.y);
-}
-
-vector<Node> aStar(Node start, Node goal) {
-    priority_queue<Node> openSet;
-    unordered_set<Node, NodeHash> closedSet;
-    unordered_map<Node, Node, NodeHash> cameFrom;
-
-    start.priority = start.cost + heuristic(start, goal);
-    openSet.push(start);
-
-    while (!openSet.empty()) {
-        Node current = openSet.top();
-        openSet.pop();
-
-        if (current == goal) {
-            vector<Node> path;
-            while (current != start) {
-                path.push_back(current);
-                current = cameFrom[current];
-            }
-            reverse(path.begin(), path.end());
-            return path;
-        }
-
-        closedSet.insert(current);
-
-        for (auto neighbor : getNeighbors(current)) {
-            if (closedSet.find(neighbor) != closedSet.end()) continue;
-            neighbor.priority = neighbor.cost + heuristic(neighbor, goal);
-            if (cameFrom.find(neighbor) == cameFrom.end() || neighbor.cost < cameFrom[neighbor].cost) {
-                cameFrom[neighbor] = current;
-                openSet.push(neighbor);
-            }
-        }
+        prev2 = tail[i];
+        tail[i] = prev;
+        prev = prev2;
     }
 
-    return vector<Node>();
-}
-
-void logic() {
-    int prevX = tailX[0];
-    int prevY = tailY[0];
-    int prev2X, prev2Y;
-    tailX[0] = x;
-    tailY[0] = y;
-    for (int i = 1; i < nTail; i++) {
-        prev2X = tailX[i];
-        prev2Y = tailY[i];
-        tailX[i] = prevX;
-        tailY[i] = prevY;
-        prevX = prev2X;
-        prevY = prev2Y;
-    }
     switch (dir) {
     case LEFT:
-        x--;
+        head.x--;
         break;
     case RIGHT:
-        x++;
+        head.x++;
         break;
     case UP:
-        y--;
+        head.y--;
         break;
     case DOWN:
-        y++;
+        head.y++;
         break;
     default:
         break;
     }
 
-    if (x >= width)
-        x = 0;
-    else if (x < 0)
-        x = width - 1;
-    if (y >= height)
-        y = 0;
-    else if (y < 0)
-        y = height - 1;
+    if (difficulty == 1) { // Easy: Snake passes through walls
+        if (head.x >= width) head.x = 0; else if (head.x < 0) head.x = width - 1;
+        if (head.y >= height) head.y = 0; else if (head.y < 0) head.y = height - 1;
+    }
+    else if (difficulty >= 2) { // Medium and Hard: Snake dies on collision with walls
+        if (head.x >= width || head.x < 0 || head.y >= height || head.y < 0) {
+            gameOver = true;
+        }
+    }
 
     for (int i = 0; i < nTail; i++) {
-        if (tailX[i] == x && tailY[i] == y)
-            gameOver = true;
+        if (tail[i].x == head.x && tail[i].y == head.y) gameOver = true;
     }
 
-    if (x == fruitX && y == fruitY) {
-        nTail++;
+    if (head.x == appleX && head.y == appleY) {
         score += 10;
-        fruitX = rand() % width;
-        fruitY = rand() % height;
+        GenerateItem();
+        nTail++;
+        tail.push_back(prev); // Adiciona a nova posição da cauda
+        applesEaten++;
+        if (difficulty == 3) { // Hard: Increase speed
+            this_thread::sleep_for(chrono::milliseconds(90 / difficulty));
+        }
+    }
+
+    if (specialItemPresent && head.x == specialItemX && head.y == specialItemY) {
+        score += 50;
+        specialItemPresent = false;
+    }
+
+    if (decreaseApplePresent && head.x == decreaseAppleX && head.y == decreaseAppleY) {
+        score -= 20;
+        if (nTail > 0) {
+            nTail--;
+            tail.pop_back(); // Remove a última posição da cauda
+        }
+        decreaseApplePresent = false;
+    }
+
+    if (difftime(time(0), startTime) >= specialItemDuration) {
+        specialItemPresent = false;
     }
 }
 
-void saveRanking() {
-    ofstream file;
-    file.open("ranking.txt");
-    for (int i = 0; i < 5; i++) {
-        file << rankingName[i] << endl;
-        file << ranking[i] << endl;
+void SnakeGame::GenerateItem() {
+    appleX = rand() % width;
+    appleY = rand() % height;
+    if (rand() % 5 == 0) {
+        specialItemPresent = true;
+        specialItemX = rand() % width;
+        specialItemY = rand() % height;
+        specialItemDuration = 10; // special item lasts 10 seconds
     }
-    file.close();
 }
 
-void loadRanking() {
-    ifstream file;
-    file.open("ranking.txt");
-    for (int i = 0; i < 5; i++) {
-        file >> rankingName[i];
-        file >> ranking[i];
-    }
-    file.close();
+void SnakeGame::GenerateChallengeItems() {
+    appleX = rand() % width;
+    appleY = rand() % height;
+    decreaseAppleX = rand() % width;
+    decreaseAppleY = rand() % height;
+    specialItemPresent = false;
+    decreaseApplePresent = true;
 }
 
-void mainMenu() {
-    loadRanking();
-    cout << "1. Start Normal Game" << endl;
-    cout << "2. Start NPC Game" << endl;
-    cout << "3. Show Ranking" << endl;
-    cout << "4. Quit" << endl;
-    char choice;
-    cin >> choice;
-    switch (choice) {
-    case '1':
-        setup();
-        break;
-    case '2':
-        setup();
-        while (!gameOver) {
-            draw();
-            Node start = { x, y, 0 };
-            Node goal = { fruitX, fruitY, 0 };
-            vector<Node> path = aStar(start, goal);
-            if (!path.empty()) {
-                Node nextStep = path.front();
-                if (nextStep.x > x) dir = RIGHT;
-                else if (nextStep.x < x) dir = LEFT;
-                else if (nextStep.y > y) dir = DOWN;
-                else if (nextStep.y < y) dir = UP;
-            }
-            logic();
-            Sleep(100); // Slow down the game loop
-        }
-        ranking[4] = score;
-        rankingName[4] = playerName;
-        for (int i = 4; i > 0; i--) {
-            if (ranking[i] > ranking[i - 1]) {
-                swap(ranking[i], ranking[i - 1]);
-                swap(rankingName[i], rankingName[i - 1]);
-            }
-        }
-        saveRanking();
-        break;
-    case '3':
-        for (int i = 0; i < 5; i++) {
-            cout << rankingName[i] << ": " << ranking[i] << endl;
-        }
-        mainMenu();
-        break;
-    case '4':
-        exit(0);
+void SnakeGame::Run() {
+    string playerName;
+    cout << "Enter your name: ";
+    cin >> playerName;
+
+    Setup();
+    while (!gameOver) {
+        Draw();
+        Input();
+        Logic();
+        this_thread::sleep_for(chrono::milliseconds(100 / difficulty)); // control game speed
     }
+    endTime = time(0);
+    int totalTime = difftime(endTime, startTime);
+    int finalScore = score + totalTime - nTail;
+    if (finalScore > highScore) highScore = finalScore;
+    cout << "Game Over! Final Score: " << finalScore << endl;
+
+    SaveScore(finalScore);
+    UpdateRanking(playerName, finalScore);
+}
+
+void SnakeGame::SaveScore(int score) {
+    ofstream file("scores.txt", ios::app);
+    if (file.is_open()) {
+        file << score << endl;
+        file.close();
+    }
+}
+
+void SnakeGame::DisplayRanking() {
+    cout << "===== Ranking =====" << endl;
+    for (const auto& ps : ranking) {
+        cout << ps.name << " - " << ps.score << endl;
+    }
+}
+
+void DisplayMenu() {
+    cout << "================= Snake Game =================" << endl;
+    cout << "1. Easy" << endl;
+    cout << "2. Medium" << endl;
+    cout << "3. Hard" << endl;
+    cout << "4. Challenge Mode" << endl;
+    cout << "5. View Ranking" << endl;
+    cout << "Choose an option: ";
 }
 
 int main() {
-    cout << "Enter your name: ";
-    cin >> playerName;
-    mainMenu();
-    while (!gameOver) {
-        draw();
-        input();
-        logic();
-        Sleep(100); // Slow down the game loop
-    }
-    ranking[4] = score;
-    rankingName[4] = playerName;
-    for (int i = 4; i > 0; i--) {
-        if (ranking[i] > ranking[i - 1]) {
-            swap(ranking[i], ranking[i - 1]);
-            swap(rankingName[i], rankingName[i - 1]);
+    srand(time(0));
+    int choice;
+
+    while (true) {
+        DisplayMenu();
+        cin >> choice;
+
+        int difficulty;
+        GameMode mode = NORMAL;
+
+        switch (choice) {
+        case 1:
+            difficulty = 1;
+            break;
+        case 2:
+            difficulty = 2;
+            break;
+        case 3:
+            difficulty = 3;
+            break;
+        case 4:
+            difficulty = 3; // Challenge mode with highest difficulty
+            mode = CHALLENGE;
+            break;
+        case 5:
+        {
+            SnakeGame game;
+            game.DisplayRanking();
+            continue;
         }
+        default:
+            difficulty = 1;
+            break;
+        }
+
+        SnakeGame game((mode == CHALLENGE ? 40 : 20), (mode == CHALLENGE ? 40 : 20), difficulty, mode);
+        game.Run();
     }
-    saveRanking();
+
     return 0;
 }
-
-
-
-
