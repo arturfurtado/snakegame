@@ -1,14 +1,21 @@
 #include <iostream>
 #include <conio.h>
-#include <windows.h>
-#include <vector>
-#include <string>
 #include <fstream>
+#include <string>
 #include <ctime>
+#include <vector>
 #include <algorithm>
-#include <chrono>
+#include <windows.h>
 
 using namespace std;
+
+struct Player {
+    string name;
+    int score;
+    double time;
+};
+
+vector<Player> ranking;
 
 bool gameOver;
 const int width = 20;
@@ -18,51 +25,26 @@ int tailX[100], tailY[100];
 int nTail;
 enum eDirection { STOP = 0, LEFT, RIGHT, UP, DOWN };
 eDirection dir;
-string playerName;
-time_t startTime, endTime;
-int appleCounter = 0;
+
 int speed = 100;
-auto startTimeChrono = chrono::steady_clock::now();
+bool wallsKill = true;
+bool increaseSpeed = false;
+time_t startTime, endTime;
+string playerName;
 
-
-struct PlayerScore {
-    string name;
-    int score;
-    double time;
-};
-
-vector<PlayerScore> ranking;
-
-//void Setup() {
-//  gameOver = false;
-//  dir = STOP;
-//  x = width / 2;
-//  y = height / 2;
-//  fruitX = (rand() % (width - 2)) + 1;
-//  fruitY = (rand() % (height - 2)) + 1;
-//  score = 0;
-//  nTail = 0;
-//  startTime = time(0);
-//  startTimeChrono = chrono::steady_clock::now();
-//}
-
-void Setup(int initialX, int initialY, int initialFruitX, int initialFruitY, int initialScore) {
+void Setup() {
     gameOver = false;
     dir = STOP;
-    x = initialX;
-    y = initialY;
-    fruitX = initialFruitX;
-    fruitY = initialFruitY;
-    score = initialScore;
-    nTail = 2;
-    appleCounter = 0;
-    speed = 100;
-    startTime = time(0);
-    startTimeChrono = chrono::steady_clock::now();
+    x = width / 2;
+    y = height / 2;
+    fruitX = rand() % width;
+    fruitY = rand() % height;
+    score = 0;
+    nTail = 0;  // Começar com três unidades
 }
 
-void Draw() {
 
+void Draw() {
     HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
     CONSOLE_CURSOR_INFO     cursorInfo;
     GetConsoleCursorInfo(out, &cursorInfo);
@@ -72,14 +54,6 @@ void Draw() {
     coord.X = 0;
     coord.Y = 0;
     SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
-    cout << "Score: " << score << endl;
-    auto currentTime = chrono::steady_clock::now();
-    auto elapsedTime = chrono::duration_cast<chrono::seconds>(currentTime - startTimeChrono).count();
-    cout << "Tempo: " << elapsedTime << "s" << endl;
-    cout << "Velocidade " << speed << endl;
-    cout << "Contador de maçãs: " << appleCounter << endl;
-
-
     for (int i = 0; i < width + 2; i++)
         cout << "#";
     cout << endl;
@@ -94,16 +68,15 @@ void Draw() {
                 cout << "F";
             else {
                 bool print = false;
-
                 for (int k = 0; k < nTail; k++) {
                     if (tailX[k] == j && tailY[k] == i) {
                         cout << "o";
                         print = true;
                     }
                 }
-                if (!print)
-                    cout << " ";
+                if (!print) cout << " ";
             }
+
             if (j == width - 1)
                 cout << "#";
         }
@@ -113,7 +86,12 @@ void Draw() {
     for (int i = 0; i < width + 2; i++)
         cout << "#";
     cout << endl;
+    cout << "Pontuacao: " << score << endl;
+    cout << "Macas: " << score / 10 << endl;  // Cada maçã vale 10 pontos
+    cout << "Velocidade: " << speed << endl;
+    cout << "Tempo: " << difftime(time(0), startTime) << " seconds" << endl;
 }
+
 
 void Input()
 {
@@ -140,13 +118,13 @@ void Input()
     }
 }
 
+
 void Logic() {
     int prevX = tailX[0];
     int prevY = tailY[0];
     int prev2X, prev2Y;
     tailX[0] = x;
     tailY[0] = y;
-
     for (int i = 1; i < nTail; i++) {
         prev2X = tailX[i];
         prev2Y = tailY[i];
@@ -155,7 +133,6 @@ void Logic() {
         prevX = prev2X;
         prevY = prev2Y;
     }
-
     switch (dir) {
     case LEFT:
         x--;
@@ -173,10 +150,18 @@ void Logic() {
         break;
     }
 
-    if (x >= width || x < 0 || y >= height || y < 0)
-        gameOver = true;
+    if (wallsKill) {
+        if (x >= width) gameOver = true;
+        else if (x < 0) gameOver = true;
+        if (y >= height) gameOver = true;
+        else if (y < 0) gameOver = true;
+    }
+    else {
+        if (x >= width) x = 0; else if (x < 0) x = width - 1;
+        if (y >= height) y = 0; else if (y < 0) y = height - 1;
+    }
 
-    for (int i = 2; i < nTail; i++)
+    for (int i = 0; i < nTail; i++)
         if (tailX[i] == x && tailY[i] == y)
             gameOver = true;
 
@@ -185,56 +170,75 @@ void Logic() {
         fruitX = rand() % width;
         fruitY = rand() % height;
         nTail++;
-        appleCounter++;
-
-        if (appleCounter % 5 == 0 && speed > 10) {
-            speed -= 90;
+        if (increaseSpeed) {
+            speed -= 5; // Aumenta a velocidade
         }
     }
+}
 
-    if (score >= 100) {
-        cout << "Parabéns, você ganhou!" << endl;
-        gameOver = true;
+void LoadRanking() {
+    ifstream inFile("ranking.txt");
+    if (inFile.is_open()) {
+        string name;
+        int score;
+        double time;
+        while (inFile >> name >> score >> time) {
+            ranking.push_back({ name, score, time });
+        }
+        inFile.close();
     }
 }
 
 void SaveRanking() {
-    ofstream outfile("ranking.txt");
-    for (const auto& entry : ranking) {
-        outfile << "Jogador: " << entry.name << ", Pontuação: " << entry.score << ", Tempo: " << entry.time << "s" << endl;
+    ofstream outFile("ranking.txt");
+    if (outFile.is_open()) {
+        for (const auto& player : ranking) {
+            outFile << player.name << " " << player.score << " " << player.time << endl;
+        }
+        outFile.close();
     }
-    outfile.close();
-}
-
-void LoadRanking() {
-    ifstream infile("ranking.txt");
-    ranking.clear();
-    string name;
-    int score;
-    double time;
-
-    while (infile >> name >> score >> time) {
-        ranking.push_back({ name, score, time });
-    }
-    infile.close();
 }
 
 void ShowRanking() {
     system("cls");
-    cout << "Ranking de Jogadores:\n";
-
-    sort(ranking.begin(), ranking.end(), [](const PlayerScore& a, const PlayerScore& b) {
-        if (a.score == b.score) {
-            return a.time < b.time;
-        }
+    cout << "Ranking:\n";
+    sort(ranking.begin(), ranking.end(), [](const Player& a, const Player& b) {
         return a.score > b.score;
         });
-
-    for (size_t i = 0; i < ranking.size(); i++) {
-        cout << i + 1 << ". " << ranking[i].name << " - Pontos: " << ranking[i].score << " - Tempo: " << ranking[i].time << "s" << endl;
+    for (const auto& player : ranking) {
+        cout << player.name << " " << player.score << " " << player.time << endl;
     }
-    cout << "\nPressione qualquer tecla para voltar ao menu...\n";
-    _getch();
+    system("pause");
+}
+
+void SelectDifficulty() {
+    cout << "Selecione uma dificuldade.:\n";
+    cout << "1. Facil (Paredes nao matam)\n";
+    cout << "2. Medio (Paredes matam)\n";
+    cout << "3. Dificil (Paredes matam e aumenta a velocidade da cobra a cada maca que come)\n";
+    int choice;
+    cin >> choice;
+
+    switch (choice) {
+    case 1:
+        wallsKill = false;
+        speed = 100;
+        break;
+    case 2:
+        wallsKill = true;
+        speed = 100;
+        break;
+    case 3:
+        wallsKill = true;
+        speed = 80;
+        increaseSpeed = true;
+        break;
+    default:
+        cout << "Escolha invalida, aperte outra tecla.\n";
+        wallsKill = false;
+        speed = 100;
+        break;
+    }
 }
 
 void MainMenu() {
@@ -253,9 +257,8 @@ void MainMenu() {
             system("cls");
             cout << "Digite seu nome: ";
             cin >> playerName;
-            //Setup();
-            Setup(10, 10, 5, 5, 0); // Exemplo de chamada da versão sobrecarregada
-
+            SelectDifficulty();
+            Setup();
             while (!gameOver) {
                 Draw();
                 Input();
@@ -281,6 +284,7 @@ void MainMenu() {
         }
     }
 }
+
 
 int main() {
     MainMenu();
