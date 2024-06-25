@@ -6,6 +6,8 @@
 #include <thread>
 #include <fstream>
 #include <algorithm>
+#include <iostream>
+#include <windows.h>
 
 using namespace std;
 
@@ -98,11 +100,11 @@ void SnakeGame::UpdateRanking(const string& playerName, int score) {
 
 void SnakeGame::Setup() {
     gameOver = false;
-    dir = RIGHT; // Começa movendo para a direita
+    dir = RIGHT; 
     head.x = width / 2;
     head.y = height / 2;
     score = 0;
-    nTail = 0; // Inicia com comprimento zero (apenas cabeça)
+    nTail = 0; 
     tail.clear();
     specialItemPresent = false;
     decreaseApplePresent = false;
@@ -120,7 +122,15 @@ void SnakeGame::Setup() {
 
 
 void SnakeGame::Draw() {
-    // Clear screen without flickering
+    HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_CURSOR_INFO     cursorInfo;
+    GetConsoleCursorInfo(out, &cursorInfo);
+    cursorInfo.bVisible = false; 
+    SetConsoleCursorInfo(out, &cursorInfo);
+    COORD coord;
+    coord.X = 0;
+    coord.Y = 0;
+    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
     cout << "\033[H\033[J";
 
     for (int i = 0; i < width + 2; i++) cout << "#";
@@ -150,20 +160,20 @@ void SnakeGame::Draw() {
 
     for (int i = 0; i < width + 2; i++) cout << "#";
     cout << endl;
-    cout << "Score: " << score << "  HighScore: " << highScore << endl;
-    cout << "Moves: " << moves << "  Apples Eaten: " << applesEaten << endl;
-    cout << "Difficulty: " << difficulty << "  Speed: " << 100 / difficulty << endl;
+    cout << "Pontos: " << score  << endl;
+    cout << "Movimentacoes: " << moves << "  Macas Comidas: " << applesEaten << endl;
+    cout << "Dificuldade: " << difficulty << "  Velocidade: " << 100 / difficulty << endl;
 
     if (mode == CHALLENGE) {
         auto timeLeft = chrono::duration_cast<chrono::seconds>(challengeEndTime - chrono::steady_clock::now()).count();
-        cout << "Time left: " << timeLeft << " seconds" << endl;
+        cout << "Tempo: " << timeLeft << " restante" << endl;
         if (timeLeft <= 0) {
             gameOver = true;
         }
     }
 
     if (applesEaten >= 100) {
-        cout << "Congratulations! You've eaten 100 apples!" << endl;
+        cout << "Parabens! Voce comeu 100 macas!" << endl;
         gameOver = true;
     }
 }
@@ -197,10 +207,8 @@ void SnakeGame::Input() {
 
 
 void SnakeGame::NPCMove() {
-    // Direções possíveis
     vector<Direction> possibleDirections;
 
-    // Determina a direção oposta à atual
     Direction oppositeDirection;
     switch (dir) {
     case LEFT:
@@ -220,7 +228,6 @@ void SnakeGame::NPCMove() {
         break;
     }
 
-    // Verifica as direções possíveis e prioriza movimentos seguros
     if (!IsCollision(head.x - 1, head.y) && dir != RIGHT) {
         possibleDirections.push_back(LEFT);
     }
@@ -234,7 +241,6 @@ void SnakeGame::NPCMove() {
         possibleDirections.push_back(DOWN);
     }
 
-    // Escolhe a melhor direção baseada na distância até a comida
     Direction bestDirection = STOP;
     int minDistance = INT_MAX;
 
@@ -243,7 +249,6 @@ void SnakeGame::NPCMove() {
         int futureCollision = 0;
         Position futureHead = head;
 
-        // Simula o movimento para frente na direção atual
         switch (direction) {
         case LEFT:
             futureHead.x--;
@@ -261,7 +266,6 @@ void SnakeGame::NPCMove() {
             break;
         }
 
-        // Verifica se esse movimento levará a uma colisão com o próprio corpo
         for (int i = 0; i < nTail; ++i) {
             if (futureHead.x == tail[i].x && futureHead.y == tail[i].y) {
                 futureCollision = 1;
@@ -269,10 +273,7 @@ void SnakeGame::NPCMove() {
             }
         }
 
-        // Verifica se o movimento leva à formação de um ciclo ou loop
         bool willFormCycle = false;
-        // Implemente sua lógica de detecção de ciclo aqui, por exemplo:
-        // Verificar se a nova posição da cabeça é semelhante à uma posição anterior
         for (int i = 1; i < nTail; ++i) {
             if (futureHead.x == tail[i].x && futureHead.y == tail[i].y) {
                 willFormCycle = true;
@@ -280,23 +281,19 @@ void SnakeGame::NPCMove() {
             }
         }
 
-        // Calcula a distância até a comida
         distance = abs(futureHead.x - appleX) + abs(futureHead.y - appleY);
 
-        // Prioriza direções que não levem a uma colisão imediata ou futura
         if (!futureCollision && !willFormCycle && distance < minDistance) {
             minDistance = distance;
             bestDirection = direction;
         }
     }
 
-    // Define a direção escolhida
     dir = bestDirection;
 }
 
 
 bool SnakeGame::IsCollision(int x, int y) {
-    // Verifica se a posição (x, y) colide com qualquer parte do corpo da cobra
     for (int i = 0; i < nTail; i++) {
         if (tail[i].x == x && tail[i].y == y) {
             return true;
@@ -335,11 +332,11 @@ void SnakeGame::Logic() {
         break;
     }
 
-    if (difficulty == 1) { // Easy: Snake passes through walls
+    if (difficulty == 1) { 
         if (head.x >= width) head.x = 0; else if (head.x < 0) head.x = width - 1;
         if (head.y >= height) head.y = 0; else if (head.y < 0) head.y = height - 1;
     }
-    else if (difficulty >= 2) { // Medium and Hard: Snake dies on collision with walls
+    else if (difficulty >= 2) { 
         if (head.x >= width || head.x < 0 || head.y >= height || head.y < 0) {
             gameOver = true;
         }
@@ -353,9 +350,9 @@ void SnakeGame::Logic() {
         score += 10;
         GenerateItem();
         nTail++;
-        tail.push_back(prev); // Adiciona a nova posição da cauda
+        tail.push_back(prev); 
         applesEaten++;
-        if (difficulty == 3) { // Hard: Increase speed
+        if (difficulty == 3) { 
             this_thread::sleep_for(chrono::milliseconds(90 / difficulty));
         }
     }
@@ -369,7 +366,7 @@ void SnakeGame::Logic() {
         score -= 20;
         if (nTail > 0) {
             nTail--;
-            tail.pop_back(); // Remove a última posição da cauda
+            tail.pop_back();
         }
         decreaseApplePresent = false;
     }
@@ -386,7 +383,7 @@ void SnakeGame::GenerateItem() {
         specialItemPresent = true;
         specialItemX = rand() % width;
         specialItemY = rand() % height;
-        specialItemDuration = 10; // special item lasts 10 seconds
+        specialItemDuration = 10;
     }
 }
 
@@ -413,13 +410,13 @@ void SnakeGame::Run() {
             Input();
         }
         Logic();
-        this_thread::sleep_for(chrono::milliseconds(100 / difficulty)); // control game speed
+        this_thread::sleep_for(chrono::milliseconds(100 / difficulty));
     }
     endTime = time(0);
     int totalTime = difftime(endTime, startTime);
     int finalScore = score + totalTime - nTail;
     if (finalScore > highScore) highScore = finalScore;
-    cout << "Game Over! Final Score: " << finalScore << endl;
+    cout << "Game Over! Pontuacao final: " << finalScore << endl;
 
     SaveScore(finalScore);
     UpdateRanking(playerName, finalScore);
@@ -442,13 +439,13 @@ void SnakeGame::DisplayRanking() {
 
 void DisplayMenu() {
     cout << "================= Snake Game =================" << endl;
-    cout << "1. Easy" << endl;
-    cout << "2. Medium" << endl;
-    cout << "3. Hard" << endl;
-    cout << "4. Challenge Mode" << endl;
-    cout << "5. View Ranking" << endl;
-    cout << "6. NPC Mode" << endl;
-    cout << "Choose an option: ";
+    cout << "1. Facil" << endl;
+    cout << "2. Medio" << endl;
+    cout << "3. Dificil" << endl;
+    cout << "4. Desafio" << endl;
+    cout << "5. Ranking" << endl;
+    cout << "6. Modo NPC" << endl;
+    cout << "Escolha uma opcao: ";
 }
 
 int main() {
@@ -473,7 +470,7 @@ int main() {
             difficulty = 3;
             break;
         case 4:
-            difficulty = 3; // Challenge mode with highest difficulty
+            difficulty = 3; 
             mode = CHALLENGE;
             break;
         case 5:
@@ -515,7 +512,7 @@ int main() {
             difficulty = 3;
             break;
         case 4:
-            difficulty = 3; // Challenge mode with highest difficulty
+            difficulty = 3; 
             mode = CHALLENGE;
             break;
         case 5:
