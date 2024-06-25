@@ -6,7 +6,6 @@
 #include <thread>
 #include <fstream>
 #include <algorithm>
-#include <iostream>
 #include <windows.h>
 
 using namespace std;
@@ -57,6 +56,7 @@ private:
     GameMode mode;
     chrono::time_point<chrono::steady_clock> challengeEndTime;
     vector<PlayerScore> ranking;
+    vector<Position> obstacles;
     int moves;
     int applesEaten;
     bool useNPC;
@@ -100,18 +100,62 @@ void SnakeGame::UpdateRanking(const string& playerName, int score) {
 
 void SnakeGame::Setup() {
     gameOver = false;
-    dir = RIGHT; 
+    dir = RIGHT;
     head.x = width / 2;
     head.y = height / 2;
     score = 0;
-    nTail = 0; 
+    nTail = 2;  // Inicializar com 3 unidades na cauda
     tail.clear();
     specialItemPresent = false;
     decreaseApplePresent = false;
+
+    // Inicializar os segmentos da cauda
+    for (int i = 0; i < nTail; i++) {
+        Position tailSegment;
+        tailSegment.x = head.x - (i + 1);
+        tailSegment.y = head.y;
+        tail.push_back(tailSegment);
+    }
+
+    // Inicializar obstáculos para dificuldade 3
+    if (difficulty == 3) {
+        obstacles.clear();
+        int numObstacles = (width * height) / 20; // Diminua o número de obstáculos
+        for (int i = 0; i < numObstacles; i++) {
+            Position obstacle;
+            obstacle.x = rand() % width;
+            obstacle.y = rand() % height;
+            obstacles.push_back(obstacle);
+        }
+    }
+
     if (mode == NORMAL) {
         GenerateItem();
     }
     else if (mode == CHALLENGE) {
+        nTail = 250;
+        tail.clear();  // Limpar a cauda antes de configurar para o modo desafio
+        Position tailChallenge = head;
+        bool esquerda = true, direita = false;
+        for (int tailComplite = 0; tail.size() < 250; tailComplite++) {
+            if (tailChallenge.x >= width && esquerda) {
+                tailChallenge.x--;
+            }
+            else {
+                esquerda = false;
+                if (tailChallenge.x <= width && direita) {
+                    tailChallenge.x++;
+                    continue;
+                }
+                else {
+                    direita = false;
+                    esquerda = true;
+                }
+                tailChallenge.y--;
+                direita = true;
+            }
+            tail.push_back(tailChallenge);
+        }
         GenerateChallengeItems();
         challengeEndTime = chrono::steady_clock::now() + chrono::minutes(2);
     }
@@ -121,17 +165,17 @@ void SnakeGame::Setup() {
 }
 
 
+
 void SnakeGame::Draw() {
     HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
-    CONSOLE_CURSOR_INFO     cursorInfo;
+    CONSOLE_CURSOR_INFO cursorInfo;
     GetConsoleCursorInfo(out, &cursorInfo);
-    cursorInfo.bVisible = false; 
+    cursorInfo.bVisible = false;
     SetConsoleCursorInfo(out, &cursorInfo);
     COORD coord;
     coord.X = 0;
     coord.Y = 0;
     SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
-    cout << "\033[H\033[J";
 
     for (int i = 0; i < width + 2; i++) cout << "#";
     cout << endl;
@@ -151,7 +195,16 @@ void SnakeGame::Draw() {
                         printTail = true;
                     }
                 }
-                if (!printTail) cout << " ";
+                if (!printTail) {
+                    bool printObstacle = false;
+                    for (const auto& obstacle : obstacles) {
+                        if (obstacle.x == j && obstacle.y == i) {
+                            cout << "&";
+                            printObstacle = true;
+                        }
+                    }
+                    if (!printObstacle) cout << " ";
+                }
             }
             if (j == width - 1) cout << "#";
         }
@@ -160,7 +213,7 @@ void SnakeGame::Draw() {
 
     for (int i = 0; i < width + 2; i++) cout << "#";
     cout << endl;
-    cout << "Pontos: " << score  << endl;
+    cout << "Pontos: " << score << endl;
     cout << "Movimentacoes: " << moves << "  Macas Comidas: " << applesEaten << endl;
     cout << "Dificuldade: " << difficulty << "  Velocidade: " << 100 / difficulty << endl;
 
@@ -204,8 +257,6 @@ void SnakeGame::Input() {
     }
 }
 
-
-
 void SnakeGame::NPCMove() {
     vector<Direction> possibleDirections;
 
@@ -246,7 +297,7 @@ void SnakeGame::NPCMove() {
 
     for (auto direction : possibleDirections) {
         int distance = 0;
-        int futureCollision = 0;
+        bool futureCollision = false;
         Position futureHead = head;
 
         switch (direction) {
@@ -268,28 +319,29 @@ void SnakeGame::NPCMove() {
 
         for (int i = 0; i < nTail; ++i) {
             if (futureHead.x == tail[i].x && futureHead.y == tail[i].y) {
-                futureCollision = 1;
+                futureCollision = true;
                 break;
             }
         }
 
-        bool willFormCycle = false;
-        for (int i = 1; i < nTail; ++i) {
-            if (futureHead.x == tail[i].x && futureHead.y == tail[i].y) {
-                willFormCycle = true;
+        for (const auto& obstacle : obstacles) {
+            if (futureHead.x == obstacle.x && futureHead.y == obstacle.y) {
+                futureCollision = true;
                 break;
             }
         }
 
         distance = abs(futureHead.x - appleX) + abs(futureHead.y - appleY);
 
-        if (!futureCollision && !willFormCycle && distance < minDistance) {
+        if (!futureCollision && distance < minDistance) {
             minDistance = distance;
             bestDirection = direction;
         }
     }
 
-    dir = bestDirection;
+    if (bestDirection != STOP) {
+        dir = bestDirection;
+    }
 }
 
 
@@ -332,11 +384,11 @@ void SnakeGame::Logic() {
         break;
     }
 
-    if (difficulty == 1) { 
+    if (difficulty == 1) {
         if (head.x >= width) head.x = 0; else if (head.x < 0) head.x = width - 1;
         if (head.y >= height) head.y = 0; else if (head.y < 0) head.y = height - 1;
     }
-    else if (difficulty >= 2) { 
+    else if (difficulty >= 2) {
         if (head.x >= width || head.x < 0 || head.y >= height || head.y < 0) {
             gameOver = true;
         }
@@ -346,13 +398,32 @@ void SnakeGame::Logic() {
         if (tail[i].x == head.x && tail[i].y == head.y) gameOver = true;
     }
 
-    if (head.x == appleX && head.y == appleY) {
+    if (difficulty == 3) {
+        for (const auto& obstacle : obstacles) {
+            if (obstacle.x == head.x && obstacle.y == head.y) {
+                gameOver = true;
+            }
+        }
+    }
+
+    if (head.x == appleX && head.y == appleY && mode == NORMAL) {
         score += 10;
         GenerateItem();
         nTail++;
-        tail.push_back(prev); 
+        tail.push_back(prev);
         applesEaten++;
-        if (difficulty == 3) { 
+        if (difficulty == 3) {
+            this_thread::sleep_for(chrono::milliseconds(90 / difficulty));
+        }
+    }
+
+    if (head.x == appleX && head.y == appleY && mode == CHALLENGE) {
+        score += 20;
+        GenerateChallengeItems();
+        nTail--;
+        tail.pop_back();
+        applesEaten++;
+        if (difficulty == 3) {
             this_thread::sleep_for(chrono::milliseconds(90 / difficulty));
         }
     }
@@ -376,6 +447,8 @@ void SnakeGame::Logic() {
     }
 }
 
+
+
 void SnakeGame::GenerateItem() {
     appleX = rand() % width;
     appleY = rand() % height;
@@ -388,6 +461,7 @@ void SnakeGame::GenerateItem() {
 }
 
 void SnakeGame::GenerateChallengeItems() {
+    srand(time(0));
     appleX = rand() % width;
     appleY = rand() % height;
     decreaseAppleX = rand() % width;
@@ -398,7 +472,7 @@ void SnakeGame::GenerateChallengeItems() {
 
 void SnakeGame::Run() {
     string playerName;
-    cout << "Enter your name: ";
+    cout << "Digite seu nome: ";
     cin >> playerName;
     Setup();
     while (!gameOver) {
@@ -410,11 +484,12 @@ void SnakeGame::Run() {
             Input();
         }
         Logic();
-        this_thread::sleep_for(chrono::milliseconds(100 / difficulty));
+        this_thread::sleep_for(chrono::milliseconds(100 / difficulty)); //controla a velocidade do jogo pela pausa da thread -> difficulty 1 = 1/100 atualiza a cada 100 segundos, difficulty 2 = 1/50 atualiza a cada 50 segundos, difficulty 3 = 1/30 atualiza a cada 33 segundos
     }
     endTime = time(0);
     int totalTime = difftime(endTime, startTime);
-    int finalScore = score + totalTime - nTail;
+    // Calcula a pontuação final considerando dificuldade e movimentos
+    int finalScore = (score + totalTime - nTail) * difficulty - moves;
     if (finalScore > highScore) highScore = finalScore;
     cout << "Game Over! Pontuacao final: " << finalScore << endl;
 
@@ -437,6 +512,7 @@ void SnakeGame::DisplayRanking() {
     }
 }
 
+
 void DisplayMenu() {
     cout << "================= Snake Game =================" << endl;
     cout << "1. Facil" << endl;
@@ -445,6 +521,7 @@ void DisplayMenu() {
     cout << "4. Desafio" << endl;
     cout << "5. Ranking" << endl;
     cout << "6. Modo NPC" << endl;
+    cout << "7. Modo NPC Medio" << endl;
     cout << "Escolha uma opcao: ";
 }
 
@@ -454,7 +531,7 @@ int main() {
     while (true) {
         DisplayMenu();
         cin >> choice;
-
+        system("cls");
         int difficulty;
         GameMode mode = NORMAL;
         bool useNPC = false;
@@ -470,7 +547,7 @@ int main() {
             difficulty = 3;
             break;
         case 4:
-            difficulty = 3; 
+            difficulty = 2;
             mode = CHALLENGE;
             break;
         case 5:
@@ -483,53 +560,16 @@ int main() {
             useNPC = true;
             difficulty = 3;
             break;
-        default:
-            difficulty = 1;
-            break;
-        }
-
-        SnakeGame game((mode == CHALLENGE ? 40 : 20), (mode == CHALLENGE ? 40 : 20), difficulty, mode, useNPC);
-        game.Run();
-    }
-
-    return 0;
-    while (true) {
-        DisplayMenu();
-        cin >> choice;
-
-        int difficulty;
-        GameMode mode = NORMAL;
-        bool useNPC = false;
-
-        switch (choice) {
-        case 1:
-            difficulty = 1;
-            break;
-        case 2:
+        case 7:
+            useNPC = true;
             difficulty = 2;
             break;
-        case 3:
-            difficulty = 3;
-            break;
-        case 4:
-            difficulty = 3; 
-            mode = CHALLENGE;
-            break;
-        case 5:
-        {
-            SnakeGame game;
-            game.DisplayRanking();
-            continue;
-        }
-        case 6:
-            useNPC = true;
-            break;
         default:
             difficulty = 1;
             break;
         }
 
-        SnakeGame game((mode == CHALLENGE ? 40 : 20), (mode == CHALLENGE ? 40 : 20), difficulty, mode, useNPC);
+        SnakeGame game((mode == CHALLENGE ? 30 : 20), (mode == CHALLENGE ? 30 : 20), difficulty, mode, useNPC);
         game.Run();
     }
 
